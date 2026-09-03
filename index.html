@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Auto Watermark Remover</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f0f12;
+            color: #f0f0f5;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+        .sidebar { background-color: #18181c; border-right: 1px solid #2a2a32; }
+        .canvas-container {
+            background-image: 
+                linear-gradient(45deg, #141418 25%, transparent 25%), 
+                linear-gradient(-45deg, #141418 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #141418 75%), 
+                linear-gradient(-45deg, transparent 75%, #141418 75%);
+            background-size: 24px 24px;
+            background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+            background-color: #1d1d24;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%; height: 4px; background: #333340; border-radius: 2px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px; background: #a855f7; border-radius: 50%; cursor: pointer;
+        }
+        #main-canvas { box-shadow: 0 10px 30px rgba(0,0,0,0.7); cursor: crosshair; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <header class="h-12 sidebar flex items-center px-4 justify-between border-b border-zinc-800">
+        <div class="flex items-center gap-2">
+            <span class="font-bold text-sm bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
+                AUTO GEMINI REMOVER
+            </span>
+        </div>
+        <div class="text-xs text-zinc-500">Tô đỏ vùng Logo để AI tự động xóa</div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar w-72 flex flex-col p-4 gap-5 shrink-0">
+            <div>
+                <button id="upload-btn" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-950">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                    Tải Ảnh Lên
+                </button>
+                <input type="file" id="image-input" accept="image/*" class="hidden">
+            </div>
+
+            <div class="space-y-4">
+                <div class="space-y-1.5">
+                    <div class="flex justify-between text-xs">
+                        <label class="text-zinc-400">Kích thước cọ chọn</label>
+                        <span id="size-val" class="text-purple-400 font-mono">30px</span>
+                    </div>
+                    <input type="range" id="brush-size" min="10" max="100" value="30">
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="space-y-2">
+                <button id="process-btn" disabled class="w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                    Xóa Vùng Đã Tô
+                </button>
+                <button id="clear-mask-btn" disabled class="w-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700 py-2 rounded-lg text-xs font-medium">
+                    Xóa Vùng Chọn Red
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mt-auto">
+                <button id="undo-btn" disabled class="bg-zinc-800 hover:bg-zinc-700 text-xs py-2 rounded border border-zinc-700 disabled:opacity-30">Hoàn tác</button>
+                <button id="download-btn" disabled class="bg-zinc-800 hover:bg-zinc-700 text-xs py-2 rounded border border-zinc-700 disabled:opacity-30">Lưu Ảnh</button>
+            </div>
+
+            <div class="bg-purple-950/20 border border-purple-800/30 p-3 rounded-lg text-[11px] text-zinc-300 space-y-1">
+                <p class="font-bold text-purple-400">Cách sử dụng xóa tự động:</p>
+                <p>1. Dùng cọ tô màu đỏ che kín toàn bộ Logo Gemini.</p>
+                <p>2. Bấm <b>"Xóa Vùng Đã Tô"</b>, thuật toán sẽ tự fill lại vùng ảnh dựa theo ảnh nền xung quanh.</p>
+            </div>
+        </aside>
+
+        <!-- Main Viewport -->
+        <main class="flex-1 relative canvas-container overflow-auto flex items-center justify-center p-8">
+            <div class="relative">
+                <canvas id="main-canvas" class="hidden"></canvas>
+            </div>
+
+            <div id="welcome" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0f0f12]/90 backdrop-blur-sm">
+                <div class="text-center p-8 border border-zinc-800 bg-zinc-900/50 rounded-2xl max-w-sm">
+                    <h2 class="text-lg font-bold mb-1 text-white">Chưa có ảnh nào</h2>
+                    <p class="text-zinc-400 text-xs">Vui lòng chọn ảnh có Logo Gemini để thực hiện xóa tự động.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        // Secondary Canvases for processing
+        const imgCanvas = document.createElement('canvas');
+        const imgCtx = imgCanvas.getContext('2d', { willReadFrequently: true });
+        const maskCanvas = document.createElement('canvas');
+        const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+
+        const uploadBtn = document.getElementById('upload-btn');
+        const imageInput = document.getElementById('image-input');
+        const processBtn = document.getElementById('process-btn');
+        const clearMaskBtn = document.getElementById('clear-mask-btn');
+        const undoBtn = document.getElementById('undo-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const welcome = document.getElementById('welcome');
+        const brushSizeInput = document.getElementById('brush-size');
+        const sizeVal = document.getElementById('size-val');
+
+        let isDrawing = false;
+        let history = [];
+
+        uploadBtn.onclick = () => imageInput.click();
+
+        imageInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    [canvas, imgCanvas, maskCanvas].forEach(c => {
+                        c.width = img.width;
+                        c.height = img.height;
+                    });
+
+                    imgCtx.drawImage(img, 0, 0);
+                    resetMask();
+                    render();
+
+                    canvas.classList.remove('hidden');
+                    welcome.style.display = 'none';
+
+                    history = [];
+                    saveToHistory();
+                    
+                    processBtn.disabled = false;
+                    clearMaskBtn.disabled = false;
+                    downloadBtn.disabled = false;
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        function resetMask() {
+            maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(imgCanvas, 0, 0);
+
+            // Draw red mask overlay
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.drawImage(maskCanvas, 0, 0);
+            ctx.restore();
+        }
+
+        // Mouse Events for drawing mask
+        canvas.onmousedown = (e) => {
+            isDrawing = true;
+            drawMask(e);
+        };
+
+        canvas.onmousemove = (e) => {
+            if (isDrawing) drawMask(e);
+        };
+
+        window.onmouseup = () => isDrawing = false;
+
+        function drawMask(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            const radius = parseInt(brushSizeInput.value) / 2;
+
+            maskCtx.fillStyle = '#ff0000';
+            maskCtx.beginPath();
+            maskCtx.arc(x, y, radius, 0, Math.PI * 2);
+            maskCtx.fill();
+
+            render();
+        }
+
+        clearMaskBtn.onclick = () => {
+            resetMask();
+            render();
+        };
+
+        // Inpainting Fast Algorithm (Navier-Stokes / Fast Telea Approximation)
+        processBtn.onclick = () => {
+            const w = canvas.width;
+            const h = canvas.height;
+            const imgData = imgCtx.getImageData(0, 0, w, h);
+            const maskData = maskCtx.getImageData(0, 0, w, h);
+            
+            const pixels = imgData.data;
+            const mask = maskData.data;
+
+            // Simple Fast Inpaint: Replace masked pixels with averaged color from boundary
+            const maxPasses = 8;
+            for (let pass = 0; pass < maxPasses; pass++) {
+                for (let y = 1; y < h - 1; y++) {
+                    for (let x = 1; x < w - 1; x++) {
+                        const idx = (y * w + x) * 4;
+                        if (mask[idx] > 0) { // Is masked
+                            let r = 0, g = 0, b = 0, count = 0;
+
+                            // Sample 8 neighbors
+                            const neighbors = [
+                                ((y - 1) * w + (x - 1)) * 4, ((y - 1) * w + x) * 4, ((y - 1) * w + (x + 1)) * 4,
+                                (y * w + (x - 1)) * 4,                             (y * w + (x + 1)) * 4,
+                                ((y + 1) * w + (x - 1)) * 4, ((y + 1) * w + x) * 4, ((y + 1) * w + (x + 1)) * 4
+                            ];
+
+                            for (let nIdx of neighbors) {
+                                if (mask[nIdx] === 0 || pass > 2) {
+                                    r += pixels[nIdx];
+                                    g += pixels[nIdx + 1];
+                                    b += pixels[nIdx + 2];
+                                    count++;
+                                }
+                            }
+
+                            if (count > 0) {
+                                pixels[idx] = r / count;
+                                pixels[idx + 1] = g / count;
+                                pixels[idx + 2] = b / count;
+                                mask[idx] = 0; // mark as solved for next passes
+                            }
+                        }
+                    }
+                }
+            }
+
+            imgCtx.putImageData(imgData, 0, 0);
+            resetMask();
+            render();
+            saveToHistory();
+        };
+
+        function saveToHistory() {
+            if (history.length >= 10) history.shift();
+            history.push(imgCtx.getImageData(0, 0, canvas.width, canvas.height));
+            undoBtn.disabled = history.length <= 1;
+        }
+
+        undoBtn.onclick = () => {
+            if (history.length > 1) {
+                history.pop();
+                const last = history[history.length - 1];
+                imgCtx.putImageData(last, 0, 0);
+                resetMask();
+                render();
+                undoBtn.disabled = history.length <= 1;
+            }
+        };
+
+        brushSizeInput.oninput = () => sizeVal.textContent = brushSizeInput.value + 'px';
+
+        downloadBtn.onclick = () => {
+            const link = document.createElement('a');
+            link.download = 'gemini_auto_cleaned.png';
+            link.href = imgCanvas.toDataURL();
+            link.click();
+        };
+    </script>
+</body>
+</html>
