@@ -43,7 +43,7 @@ canvas{width:100%;height:auto;display:block;border-radius:6px;background:#000}
   <label>Độ phủ mask <input id="grow" type="range" min="0" max="7" step="1" value="4"></label>
   <label>Grain <input id="grain" type="range" min="0" max="1" step="0.05" value="1"></label>
   <label>Chế độ
-    <select id="mode"><option value="auto">Tự động</option><option value="alpha">Reverse-alpha (nền tối)</option><option value="fit">Fit nền + grain (nền sáng/màu)</option></select>
+    <select id="mode"><option value="auto">Tự động</option><option value="alpha">Reverse-alpha (nền tối)</option><option value="fit">Fit nền + grain (nền sáng/màu)</option><option value="tpl">Template (nền nhiều chi tiết)</option></select>
   </label>
   <button id="dl">Tải ảnh đã xóa</button>
   <button class="sec" id="dlAll">Tải tất cả</button>
@@ -273,6 +273,163 @@ const GWR = (() => {
   }
   return {detect,remove,classify,fitBackground};
 })();
+
+/* ===== Template matching: dành cho nền nhiều chi tiết / sáng, nơi fit nền không đủ ===== */
+GWR.TPL = {n:35, a:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,50,208,28,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,130,255,106,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,207,255,202,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,42,254,255,244,50,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,164,255,255,255,157,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,57,240,255,255,255,236,46,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,191,255,255,255,255,255,160,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,118,255,255,255,255,254,255,255,95,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,53,233,255,254,255,255,255,253,255,225,30,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,236,255,255,253,255,255,253,255,253,255,211,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,191,255,255,255,254,253,255,253,255,255,255,255,176,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,46,225,255,255,255,254,253,253,253,252,255,253,253,255,255,218,27,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,103,236,255,253,253,255,249,253,249,253,255,253,254,249,255,249,255,222,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,54,176,255,255,253,253,255,254,255,253,254,249,255,255,255,253,255,255,255,255,255,180,38,0,0,0,0,0,0,0,0,0,0,65,168,244,255,255,255,255,253,255,255,254,253,249,249,255,255,255,255,255,255,255,255,253,255,237,147,35,0,0,0,0,0,42,115,221,252,255,255,255,255,255,255,255,253,253,253,255,255,253,254,255,253,255,255,255,255,253,255,250,255,255,245,195,111,29,0,0,230,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,253,255,253,250,253,255,254,254,255,252,254,255,254,255,255,255,211,0,0,61,130,214,253,255,255,255,255,255,255,255,255,253,253,254,255,255,255,252,255,254,255,254,255,254,254,254,255,254,252,215,119,46,0,0,0,0,0,50,169,245,255,255,253,255,255,254,255,252,255,255,255,255,250,253,254,255,254,254,254,254,255,235,168,54,0,0,0,0,0,0,0,0,0,0,57,203,255,255,250,255,255,254,250,254,254,251,253,254,255,255,254,254,255,254,255,173,54,0,0,0,0,0,0,0,0,0,0,0,0,0,0,119,237,255,255,254,253,254,253,255,254,254,254,254,255,254,254,255,231,95,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,58,238,255,254,254,254,253,253,251,254,254,254,255,254,255,218,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,194,255,251,253,252,251,251,255,255,254,250,254,185,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,234,255,251,251,253,253,254,255,254,255,227,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,50,231,255,254,255,255,255,255,255,231,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,112,255,255,255,255,255,255,255,112,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,185,255,255,255,255,255,185,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,70,240,255,255,255,240,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,178,255,255,255,151,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,66,255,255,243,43,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,224,255,201,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,135,255,112,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,62,224,27,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]};
+GWR.detectTemplate = function(img, hint){
+  const {data:d,width:W,height:H}=img, T=GWR.TPL;
+  // độ sáng
+  const L=new Float32Array(W*H); for(let i=0;i<W*H;i++) L[i]=d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114;
+  const sample=(u,v)=>{ // bilinear trên template (0..n-1)
+    const x0=Math.floor(u),y0=Math.floor(v),fx=u-x0,fy=v-y0; const g=(x,y)=>(x<0||y<0||x>=T.n||y>=T.n)?0:T.a[y*T.n+x]/255;
+    return g(x0,y0)*(1-fx)*(1-fy)+g(x0+1,y0)*fx*(1-fy)+g(x0,y0+1)*(1-fx)*fy+g(x0+1,y0+1)*fx*fy; };
+  const sizes=[]; for(let s=0.7;s<=1.6;s+=0.1) sizes.push(Math.round(T.n*s));
+  const models=sizes.map(n=>{
+    const R=n/2+9, inside=[], ring=[];
+    for(let dy=-Math.ceil(R);dy<=Math.ceil(R);dy++)for(let dx=-Math.ceil(R);dx<=Math.ceil(R);dx++){
+      const a=sample(dx*T.n/n+(T.n-1)/2, dy*T.n/n+(T.n-1)/2);
+      if(a>0.8) inside.push([dx,dy]);
+      else if(a<0.02){ // cách shape 3..8 px?
+        let near=1e9; for(let k=-8;k<=8&&near>2.5;k+=1) for(let l=-8;l<=8;l+=1){
+          if(k*k+l*l>64) continue; const b=sample((dx+k)*T.n/n+(T.n-1)/2,(dy+l)*T.n/n+(T.n-1)/2); if(b>0.3){near=Math.min(near,Math.hypot(k,l));}
+        }
+        if(near>=3&&near<=8) ring.push([dx,dy]);
+      }
+    }
+    return {n,inside,ring};
+  });
+  const sz=Math.max(120,Math.round(0.2*W));
+  // vị trí logo Gemini: tâm cách mép phải/dưới ≈ 6–11% chiều rộng ảnh
+  let cx0=Math.round(W-0.11*W),cx1=Math.round(W-0.06*W),cy0=Math.round(H-0.11*W),cy1=Math.round(H-0.06*W);
+  if(hint){cx0=hint.x-30;cx1=hint.x+30;cy0=hint.y-30;cy1=hint.y+30;}
+  let best=null;
+  for(const m of models){
+    const pad=m.n/2+9;
+    for(let cy=Math.max(Math.ceil(pad),cy0);cy<=Math.min(H-Math.ceil(pad),cy1);cy+=2)
+    for(let cx=Math.max(Math.ceil(pad),cx0);cx<=Math.min(W-Math.ceil(pad),cx1);cx+=2){
+      let si=0,sr=0,sr2=0,sin2=0;
+      for(const [dx,dy] of m.inside){const v=L[(cy+dy)*W+cx+dx];si+=v;sin2+=v*v;}
+      for(const [dx,dy] of m.ring){const v=L[(cy+dy)*W+cx+dx];sr+=v;sr2+=v*v;}
+      const ni=m.inside.length,nr=m.ring.length; const mi=si/ni,mr=sr/nr;
+      const sdR=Math.sqrt(Math.max(0,sr2/nr-mr*mr)), sdI=Math.sqrt(Math.max(0,sin2/ni-mi*mi));
+      // logo trắng bán trong suốt: trong sao sáng hơn vòng ngoài, và bớt chi tiết (texture bị giảm 30%)
+      const gain=mi-mr; if(gain<=0) continue;
+      const score=gain/(sdR+sdI*0.5+3);
+      if(!best||score>best.score) best={score,cx,cy,n:m.n,gain,sdI,sdR};
+    }
+  }
+  return best;
+};
+
+// Xóa bằng reverse-alpha theo template (đúng cho mọi nền), tự dò alpha tổng
+GWR.removeTemplate = function(img, p, opt={}){
+  const {data:d,width:W,height:H}=img, T=GWR.TPL;
+  if(!opt.noRefine) p=GWR.refineTemplate(img,p,opt);
+  const n=p.n;
+  const out=new Uint8ClampedArray(d);
+  const sample=(u,v)=>{const x0=Math.floor(u),y0=Math.floor(v),fx=u-x0,fy=v-y0;const g=(x,y)=>(x<0||y<0||x>=T.n||y>=T.n)?0:T.a[y*T.n+x]/255;
+    return g(x0,y0)*(1-fx)*(1-fy)+g(x0+1,y0)*fx*(1-fy)+g(x0,y0+1)*(1-fx)*fy+g(x0+1,y0+1)*fx*fy;};
+  const R=Math.ceil(n/2+3), pts=[];
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+    const t=sample(dx*T.n/n+(T.n-1)/2,dy*T.n/n+(T.n-1)/2); if(t>0.004) pts.push({x:p.cx+dx,y:p.cy+dy,t});
+  }
+  const val=(x,y,ch,a)=>(d[(y*W+x)*4+ch]-255*a)/(1-a);
+  // ước lượng alpha: step ở biên (trong vs ngoài) phải ≈ 0
+  const inner=pts.filter(q=>q.t>0.5&&q.t<0.95), outer=[];
+  for(let dy=-R-3;dy<=R+3;dy++)for(let dx=-R-3;dx<=R+3;dx++){
+    const t=sample(dx*T.n/n+(T.n-1)/2,dy*T.n/n+(T.n-1)/2); if(t>0.0&&t<0.004){ /* cạnh ngoài */ }
+  }
+  // dải ngoài: pixel cách shape 2..4px (không bị logo)
+  const edge=[];const A=(dx,dy)=>sample(dx*T.n/n+(T.n-1)/2,dy*T.n/n+(T.n-1)/2);
+  for(let dy=-R-4;dy<=R+4;dy++)for(let dx=-R-4;dx<=R+4;dx++){
+    if(A(dx,dy)>0.02) continue; let near=1e9;
+    for(let k=-4;k<=4;k++)for(let l=-4;l<=4;l++){if(A(dx+k,dy+l)>0.5) near=Math.min(near,Math.hypot(k,l));}
+    if(near>=2&&near<=4.5) edge.push([p.cx+dx,p.cy+dy]);
+  }
+  const lumAt=(x,y,a)=>{let s=0;for(let ch=0;ch<3;ch++)s+=val(x,y,ch,a);return s/3;};
+  const stepAt=a=>{ // trong shape (t>0.9, sát biên) vs vòng ngoài
+    let si=0,ni=0,so=0,no=0;
+    for(const q of pts) if(q.t>0.9){ // lấy lớp trong cùng biên: có hàng xóm t<0.3 trong 3px
+      let nb=false; for(let k=-3;k<=3&&!nb;k++)for(let l=-3;l<=3;l++){ if(A(q.x-p.cx+k,q.y-p.cy+l)<0.3){nb=true;break;} }
+      if(nb){si+=lumAt(q.x,q.y,a*q.t);ni++;}
+    }
+    for(const [x,y] of edge){so+=lumAt(x,y,0);no++;}
+    return ni&&no? si/ni-so/no : 0;
+  };
+  let a;
+  if(opt.alpha||p.alpha) a=opt.alpha||p.alpha; else {
+    let lo=0.12,hi=0.5,fl=stepAt(lo),fh=stepAt(hi);
+    if(fl*fh>0){a=0.3;} else { for(let i=0;i<14;i++){const m=(lo+hi)/2,fm=stepAt(m); if(fm*fl>0){lo=m;fl=fm;}else{hi=m;fh=fm;}} a=(lo+hi)/2; }
+    a=Math.max(0.2,Math.min(0.42,a));
+  }
+  for(const q of pts){
+    const al=Math.min(0.95,a*q.t), i=(q.y*W+q.x)*4;
+    for(let ch=0;ch<3;ch++) out[i+ch]=Math.max(0,Math.min(255,Math.round(val(q.x,q.y,ch,al))));
+  }
+  // Tách tần số: màu nền (thấp) lấy từ vùng quanh logo, chi tiết (cao) lấy từ ảnh đã reverse-alpha
+  {
+    const B=R+10, bx0=p.cx-B,by0=p.cy-B,bw=2*B+1,bh=2*B+1;
+    if(bx0>=1&&by0>=1&&bx0+bw<W-1&&by0+bh<H-1){
+      const inM=new Uint8Array(bw*bh);
+      for(const q of pts) if(q.t>0.004) inM[(q.y-by0)*bw+q.x-bx0]=1;
+      // mở rộng mask 2px
+      let M=inM; for(let it=0;it<(opt.pad??5);it++){const N=new Uint8Array(M);for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){if(M[y*bw+x])continue;if(M[y*bw+x-1]||M[y*bw+x+1]||M[(y-1)*bw+x]||M[(y+1)*bw+x]||M[(y-1)*bw+x-1]||M[(y-1)*bw+x+1]||M[(y+1)*bw+x-1]||M[(y+1)*bw+x+1])N[y*bw+x]=1;}M=N;}
+      const blur=(src)=>{ // box blur bán kính 3, 2 lượt
+        let a=src;for(let pass=0;pass<2;pass++){const t=new Float32Array(bw*bh),o=new Float32Array(bw*bh);
+          for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let s=0,c=0;for(let k=-3;k<=3;k++){const xx=x+k;if(xx<0||xx>=bw)continue;s+=a[y*bw+xx];c++;}t[y*bw+x]=s/c;}
+          for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let s=0,c=0;for(let k=-3;k<=3;k++){const yy=y+k;if(yy<0||yy>=bh)continue;s+=t[yy*bw+x];c++;}o[y*bw+x]=s/c;}
+          a=o;} return a;};
+      for(let ch=0;ch<3;ch++){
+        const orig=new Float32Array(bw*bh), rev=new Float32Array(bw*bh);
+        for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){orig[y*bw+x]=d[((by0+y)*W+bx0+x)*4+ch];rev[y*bw+x]=out[((by0+y)*W+bx0+x)*4+ch];}
+        // harmonic fill của ảnh gốc trong M
+        let Hh=new Float32Array(orig); let sum=0,cnt=0; for(let i=0;i<bw*bh;i++) if(!M[i]){sum+=orig[i];cnt++;}
+        for(let i=0;i<bw*bh;i++) if(M[i]) Hh[i]=sum/cnt;
+        for(let it=0;it<400;it++){for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x;if(!M[i])continue;Hh[i]=(Hh[i-1]+Hh[i+1]+Hh[i-bw]+Hh[i+bw])*0.25;}}
+        const lr=blur(rev);
+        for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const i=y*bw+x;if(!M[i])continue;
+          const hp=rev[i]-lr[i]; const v=Hh[i]+hp;
+          out[((by0+y)*W+bx0+x)*4+ch]=Math.max(0,Math.min(255,Math.round(v)));}
+      }
+    }
+  }
+  // làm mịn nhẹ dải biên (nơi template lệch nửa pixel)
+  const band=pts.filter(q=>q.t>0.02&&q.t<0.7), copy=new Uint8ClampedArray(out);
+  for(const q of band){const i=(q.y*W+q.x)*4;
+    for(let ch=0;ch<3;ch++){let s=0,c=0;for(let k=-1;k<=1;k++)for(let l=-1;l<=1;l++){s+=copy[((q.y+l)*W+q.x+k)*4+ch];c++;}
+      const w=0.5*(1-Math.abs(q.t-0.35)/0.35); out[i+ch]=Math.round(copy[i+ch]*(1-w)+s/c*w);}}
+  return {data:out,alpha:a,pts};
+};
+
+
+GWR.refineTemplate = function(img,p,opt={}){
+  const {data:d,width:W,height:H}=img, T=GWR.TPL;
+  const L=new Float32Array(W*H); for(let i=0;i<W*H;i++) L[i]=d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114;
+  const buf=new Float32Array(L);
+  const samp=(u,v)=>{const x0=Math.floor(u),y0=Math.floor(v),fx=u-x0,fy=v-y0;const g=(x,y)=>(x<0||y<0||x>=T.n||y>=T.n)?0:T.a[y*T.n+x]/255;
+    return g(x0,y0)*(1-fx)*(1-fy)+g(x0+1,y0)*fx*(1-fy)+g(x0,y0+1)*(1-fx)*fy+g(x0+1,y0+1)*fx*fy;};
+  const energy=(cx,cy,n,a)=>{
+    const R=Math.ceil(n/2+3), B=R+3;
+    if(cx-B<1||cy-B<1||cx+B>=W-1||cy+B>=H-1) return 1e18;
+    for(let dy=-B;dy<=B;dy++)for(let dx=-B;dx<=B;dx++){const k=(cy+dy)*W+cx+dx;buf[k]=L[k];}
+    for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+      const t=samp(dx*T.n/n+(T.n-1)/2,dy*T.n/n+(T.n-1)/2); if(t<=0.004) continue;
+      const al=Math.min(0.95,a*t),k=(cy+dy)*W+cx+dx; buf[k]=(L[k]-255*al)/(1-al);
+    }
+    let e=0;
+    for(let dy=-B;dy<B;dy++)for(let dx=-B;dx<B;dx++){const k=(cy+dy)*W+cx+dx;const gx=buf[k+1]-buf[k],gy=buf[k+W]-buf[k];e+=gx*gx+gy*gy;}
+    return e;
+  };
+  let best={e:1e19};
+  const alphas=opt.alpha?[opt.alpha]:[0.30];
+  for(let dn=-3;dn<=3;dn+=1)for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++)for(const a of alphas){
+    const n=p.n+dn; if(n<18) continue;
+    const e=energy(p.cx+dx,p.cy+dy,n,a);
+    if(e<best.e) best={e,cx:p.cx+dx,cy:p.cy+dy,n,a};
+  }
+  return Object.assign({},p,{cx:best.cx,cy:best.cy,n:best.n,alpha:best.a});
+};
+
 if(typeof module!=='undefined') module.exports=GWR;
 </script>
 
@@ -310,28 +467,41 @@ function opts(){return{grow:+$('grow').value,grain:+$('grain').value,mode:$('mod
 
 function process(i){
   const it=items[i], {width:W,height:H}=it.img;
-  const det=GWR.detect(it.img,it.hint);
   const cin=$('cin'),cout=$('cout'); cin.width=cout.width=W;cin.height=cout.height=H;
   cin.getContext('2d').putImageData(it.img,0,0);
-  if(!det){
+  const o=opts();
+  let det=GWR.detect(it.img,it.hint), cls=det?GWR.classify(it.img,det):null;
+  let data=null,bbox=null,how='',kind=cls?cls.kind:'busy';
+  const wantTpl = o.mode==='tpl' || (o.mode==='auto' && (!det || cls.kind!=='dark'));
+  if(wantTpl){
+    const tp=GWR.detectTemplate(it.img,it.hint);
+    if(tp && (tp.score>1.1 || it.hint || o.mode==='tpl')){
+      const r=GWR.removeTemplate(it.img,tp,{pad:2+o.grow});
+      data=r.data; const h2=Math.round(tp.n/2)+2; bbox={x0:tp.cx-h2,y0:tp.cy-h2,x1:tp.cx+h2,y1:tp.cy+h2};
+      how=`template + reverse-alpha (α≈${(r.alpha||0).toFixed(2)}) + ghép màu nền quanh logo`;
+    }
+  }
+  if(!data && det && o.mode!=='tpl'){
+    const r=GWR.remove(it.img,det,{grow:o.grow,grain:o.grain,mode:o.mode==='auto'?'auto':o.mode});
+    data=r.data; bbox=det.bbox; how=r.mode==='alpha'?'reverse-alpha blend':'fit nền + grain';
+  }
+  if(!data){
     cout.getContext('2d').putImageData(it.img,0,0);
     it.status='không thấy logo'; it.result=null;
     $('info').textContent='Không dò thấy logo. Bấm vào ảnh gốc ngay chỗ logo để chỉ vị trí.';
     $('zoomRow').style.display='none'; renderList(); return;
   }
-  const r=GWR.remove(it.img,det,opts());
-  it.result=r.data; it.det=det;
-  const o=new ImageData(r.data,W,H); cout.getContext('2d').putImageData(o,0,0);
+  it.result=data;
+  cout.getContext('2d').putImageData(new ImageData(data,W,H),0,0);
   const g=cin.getContext('2d'); g.strokeStyle='#6ea8fe';g.lineWidth=Math.max(1,W/500);
-  const b=det.bbox; g.strokeRect(b.x0-3,b.y0-3,b.x1-b.x0+7,b.y1-b.y0+7);
-  const kindName=names[r.cls.kind];
-  $('info').textContent=`Logo ${b.x1-b.x0+1}×${b.y1-b.y0+1}px tại (${b.x0},${b.y0}) · ${kindName} (độ sáng ${r.cls.lum.toFixed(0)}) → cách xóa: ${r.mode==='alpha'?'reverse-alpha blend':'fit nền + grain'}`;
+  const b=bbox; g.strokeRect(b.x0-3,b.y0-3,b.x1-b.x0+7,b.y1-b.y0+7);
+  const kindName=names[kind]||kind;
+  $('info').textContent=`Logo ~${b.x1-b.x0+1}×${b.y1-b.y0+1}px tại (${b.x0},${b.y0}) · ${kindName} → cách xóa: ${how}`;
   it.status=kindName; renderList();
-  // zoom
   const pad=24, zx=Math.max(0,b.x0-pad), zy=Math.max(0,b.y0-pad), zw=Math.min(W-zx,b.x1-b.x0+1+2*pad), zh=Math.min(H-zy,b.y1-b.y0+1+2*pad);
   const zs=Math.max(1,Math.floor(360/Math.max(zw,zh)));
-  [['zin',it.img.data],['zout',r.data]].forEach(([id,data])=>{
-    const t=document.createElement('canvas');t.width=W;t.height=H;t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(data),W,H),0,0);
+  [['zin',it.img.data],['zout',data]].forEach(([id,dd])=>{
+    const t=document.createElement('canvas');t.width=W;t.height=H;t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(dd),W,H),0,0);
     const z=$(id);z.width=zw*zs;z.height=zh*zs;const c=z.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(t,zx,zy,zw,zh,0,0,zw*zs,zh*zs);
     z.style.maxWidth='100%';
   });
@@ -349,7 +519,7 @@ function save(it){
   c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=it.name.replace(/\.\w+$/,'')+'_clean.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});
 }
 $('dl').onclick=()=>cur>=0&&save(items[cur]);
-$('dlAll').onclick=()=>{items.forEach((it,i)=>setTimeout(()=>{if(!it.result){const d=GWR.detect(it.img,it.hint);if(d)it.result=GWR.remove(it.img,d,opts()).data;}save(it)},i*300));};
+$('dlAll').onclick=()=>{const keep=cur;items.forEach((it,i)=>{process(i);});select(keep);items.forEach((it,i)=>setTimeout(()=>save(it),i*300));};
 }
 </script>
 </body>
