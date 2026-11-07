@@ -430,6 +430,128 @@ GWR.refineTemplate = function(img,p,opt={}){
   return Object.assign({},p,{cx:best.cx,cy:best.cy,n:best.n,alpha:best.a});
 };
 
+
+/* ===== Exemplar inpaint: tái tạo họa tiết từ mảng xung quanh (xóa 100%, dùng cho nền nhiều chi tiết) ===== */
+GWR.inpaintBox = function(img, mask, W, H, box, opt={}){
+  // mask: Uint8Array W*H (1 = cần vá). box: {x0,y0,x1,y1} vùng làm việc. Trả về Uint8ClampedArray mới.
+  const d=img.data, out=new Uint8ClampedArray(d), half=opt.half||5, sr=opt.search||44;
+  const unk=new Uint8Array(W*H); for(let i=0;i<W*H;i++) unk[i]=mask[i];
+  const src=new Uint8Array(W*H); // 1 = pixel nguồn hợp lệ (nằm ngoài vùng vá + vùng đệm)
+  const guard=GWR.dilate2(mask,W,H,3);
+  for(let i=0;i<W*H;i++) src[i]=guard[i]?0:1;
+  const gw=opt.guideWeight??1.6, filledFlag=new Uint8Array(W*H);
+  const todo=[]; for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++) if(mask[y*W+x]) todo.push([x,y]);
+  const known=new Uint8Array(W*H); for(let i=0;i<W*H;i++) known[i]=unk[i]?0:1;
+  let remaining=todo.length, guardLoop=0;
+  const pending=new Set(todo.map(([x,y])=>y*W+x));
+  const cnt=(x,y)=>{let c=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<W&&Y<H&&known[Y*W+X])c++;}return c;};
+  const col=[0,0,0];
+  while(pending.size&&guardLoop++<400){
+    // lớp vỏ hành: các pixel đang chờ có hàng xóm đã biết, ưu tiên nhiều hàng xóm nhất
+    const front=[]; for(const k of pending){const x=k%W,y=(k/W)|0;const c=cnt(x,y);if(c>0)front.push([c,x,y,k]);}
+    if(!front.length) break;
+    front.sort((a,b)=>b[0]-a[0]);
+    const take=Math.max(1,Math.min(front.length,Math.ceil(front.length*0.35)));
+    const batch=front.slice(0,take), results=[];
+    for(const [c,x,y,k] of batch){
+      let bestE=1e18,bx=-1,by=-1;
+      const xs0=Math.max(half,x-sr),xs1=Math.min(W-half-1,x+sr),ys0=Math.max(half,y-sr),ys1=Math.min(H-half-1,y+sr);
+      // danh sách offset đã biết của patch đích
+      const tp=[]; for(let dy=-half;dy<=half;dy++)for(let dx=-half;dx<=half;dx++){const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=W||Y>=H)continue;const kk=Y*W+X;if(known[kk]&&!(opt.guide&&mask[kk]&&!filledFlag[kk]))tp.push([dx,dy,out[kk*4],out[kk*4+1],out[kk*4+2],1]);else if(opt.guide&&mask[kk])tp.push([dx,dy,opt.guide[kk*4],opt.guide[kk*4+1],opt.guide[kk*4+2],gw]);}
+      for(let sy=ys0;sy<=ys1;sy++)for(let sx=xs0;sx<=xs1;sx++){
+        if(!src[sy*W+sx]) continue;
+        let e=0,ok=true;
+        for(let t=0;t<tp.length;t++){const q=tp[t];const X=sx+q[0],Y=sy+q[1];const kk=Y*W+X;
+          if(!src[kk]){ok=false;break;}
+          const a=out[kk*4]-q[2],b=out[kk*4+1]-q[3],cc=out[kk*4+2]-q[4];e+=(a*a+b*b+cc*cc)*q[5]; if(e>=bestE){ok=false;break;}}
+        if(ok&&e<bestE){bestE=e;bx=sx;by=sy;}
+      }
+      if(bx<0){ // dự phòng: trung bình hàng xóm đã biết
+        let r=0,g=0,b=0,n=0;for(const q of tp){r+=q[2]*q[5];g+=q[3]*q[5];b+=q[4]*q[5];n+=q[5];} results.push([k,r/n,g/n,b/n]);
+      } else { const kk=by*W+bx; results.push([k,out[kk*4],out[kk*4+1],out[kk*4+2]]); }
+    }
+    for(const [k,r,g,b] of results){out[k*4]=r;out[k*4+1]=g;out[k*4+2]=b;known[k]=1;filledFlag[k]=1;pending.delete(k);}
+  }
+  return out;
+};
+GWR.dilate2=function(mask,W,H,r){return (function dil(m,k){let cur=m;for(let i=0;i<k;i++){const n=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(cur[y*W+x]){n[y*W+x]=1;continue;}let on=0;for(let dy=-1;dy<=1&&!on;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<W&&Y<H&&cur[Y*W+X]){on=1;break;}}n[y*W+x]=on;}cur=n;}return cur;})(mask,r);};
+
+// Xóa 100% bằng inpaint theo hình template (đã canh khớp bằng refineTemplate)
+GWR.removeTemplateInpaint = function(img,p,opt={}){
+  const {width:W,height:H}=img, T=GWR.TPL;
+  const n=p.n+2, R=Math.ceil(n/2+3);
+  const guide=GWR.removeTemplate(img,p,{noRefine:true,alpha:0.3,pad:5}).data;
+  const samp=(u,v)=>{const x0=Math.floor(u),y0=Math.floor(v),fx=u-x0,fy=v-y0;const g=(x,y)=>(x<0||y<0||x>=T.n||y>=T.n)?0:T.a[y*T.n+x]/255;
+    return g(x0,y0)*(1-fx)*(1-fy)+g(x0+1,y0)*fx*(1-fy)+g(x0,y0+1)*(1-fx)*fy+g(x0+1,y0+1)*fx*fy;};
+  const m=new Uint8Array(W*H);
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){const t=samp(dx*T.n/n+(T.n-1)/2,dy*T.n/n+(T.n-1)/2); if(t>0.004) m[(p.cy+dy)*W+p.cx+dx]=1;}
+  const pad=opt.pad??6;
+  const M=GWR.dilate2(m,W,H,pad);
+  const B=R+pad+2;
+  const box={x0:Math.max(0,p.cx-B),y0:Math.max(0,p.cy-B),x1:Math.min(W,p.cx+B+1),y1:Math.min(H,p.cy+B+1)};
+  let cf=GWR.cloneFill(img,M,W,H,box,opt);
+  const filled=(cf&&cf.err<(opt.cloneMaxErr??900))?cf.data:GWR.inpaintBox(img,M,W,H,box,Object.assign({guide},opt));
+  GWR.lastFill=cf?{dx:cf.dx,dy:cf.dy,err:cf.err,used:filled===cf.data?'clone':'patch'}:{used:'patch'};
+  // Clone: ghép liền mạch kiểu Poisson-lite — nội suy điều hòa chênh lệch (gốc - clone) từ viền vào trong
+  const usedClone = cf && filled===cf.data;
+  if(usedClone){
+    const bw=box.x1-box.x0,bh=box.y1-box.y0;
+    for(let ch=0;ch<3;ch++){
+      const Dd=new Float32Array(bw*bh), Mm=new Uint8Array(bw*bh);
+      let sum=0,cnt=0;
+      for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const k=(y+box.y0)*W+x+box.x0,i=y*bw+x;Mm[i]=M[k];if(!M[k]){Dd[i]=img.data[k*4+ch]-filled[k*4+ch];}}
+      // ban đầu: trung bình chênh lệch ở vòng viền sát mask
+      for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x;if(Mm[i])continue;if(Mm[i-1]||Mm[i+1]||Mm[i-bw]||Mm[i+bw]){sum+=Dd[i];cnt++;}}
+      const avg=cnt?sum/cnt:0; for(let i=0;i<bw*bh;i++) if(Mm[i]) Dd[i]=avg;
+      for(let it=0;it<500;it++)for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x;if(!Mm[i])continue;Dd[i]=(Dd[i-1]+Dd[i+1]+Dd[i-bw]+Dd[i+bw])*0.25;}
+      for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const i=y*bw+x;if(!Mm[i])continue;const k=(y+box.y0)*W+x+box.x0;filled[k*4+ch]=Math.max(0,Math.min(255,Math.round(filled[k*4+ch]+Dd[i])));}
+    }
+  } else
+  // Hậu xử lý: làm mềm cho khớp độ nhòe của ảnh + kéo màu nền (tần số thấp) về đúng tông quanh logo
+  {
+    const bw=box.x1-box.x0,bh=box.y1-box.y0;
+    const gblur=(a,r,passes)=>{let s=a;for(let ps=0;ps<passes;ps++){const t=new Float32Array(bw*bh),o=new Float32Array(bw*bh);
+      for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let q=0,c=0;for(let k=-r;k<=r;k++){const xx=x+k;if(xx<0||xx>=bw)continue;q+=s[y*bw+xx];c++;}t[y*bw+x]=q/c;}
+      for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let q=0,c=0;for(let k=-r;k<=r;k++){const yy=y+k;if(yy<0||yy>=bh)continue;q+=t[yy*bw+x];c++;}o[y*bw+x]=q/c;}
+      s=o;}return s;};
+    for(let ch=0;ch<3;ch++){
+      const f=new Float32Array(bw*bh),g=new Float32Array(bw*bh);
+      for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const k=(y+box.y0)*W+x+box.x0;f[y*bw+x]=filled[k*4+ch];g[y*bw+x]=guide[k*4+ch];}
+      const fs=f, fl=gblur(f,3,2), gl=gblur(g,3,2);
+      for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const k=(y+box.y0)*W+x+box.x0; if(!M[k]) continue;
+        const v=fs[y*bw+x]+(gl[y*bw+x]-fl[y*bw+x])*1.0; filled[k*4+ch]=Math.max(0,Math.min(255,Math.round(v)));}
+    }
+  }
+  const inner=null; const out=new Uint8ClampedArray(filled);
+  const M2=GWR.dilate2(M,W,H,1);
+  for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const k=y*W+x; if(M2[k]&&!M[k]){for(let c=0;c<3;c++) out[k*4+c]=Math.round(img.data[k*4+c]*0.5+filled[k*4+c]*0.5);}}
+  return {data:out,alpha:p.alpha,pts:null,cx:p.cx,cy:p.cy,n:p.n};
+};
+
+
+// Clone-stamp tự động: tìm vùng ảnh cùng họa tiết (dịch chuyển dx,dy) khớp nhất với viền quanh logo rồi chép nguyên khối -> không bị lốm đốm
+GWR.cloneFill = function(img,M,W,H,box,opt={}){
+  const d=img.data, guard=GWR.dilate2(M,W,H,3), ringM=GWR.dilate2(M,W,H,4);
+  const mp=[],rp=[];
+  for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const k=y*W+x; if(M[k]) mp.push(k); else if(ringM[k]) rp.push(k);}
+  const sr=opt.search||70; let best=null;
+  const okSrc=(k,dx,dy)=>{const x=k%W+dx,y=((k/W)|0)+dy; return x>=6&&y>=6&&x<W-0.1*W+Math.round(0.05*W)&&y<H-6&&x<box.x0+(box.x1-box.x0)/2&&!guard[y*W+x];};
+  const cands=[];
+  for(let dy=-sr;dy<=sr;dy++)for(let dx=-sr;dx<=sr;dx++){
+    if(Math.abs(dx)<8&&Math.abs(dy)<8) continue;
+    let ok=true; for(let i=0;i<mp.length;i+=3){ if(!okSrc(mp[i],dx,dy)){ok=false;break;} }
+    if(!ok) continue;
+    let e=0,n=0; for(let i=0;i<rp.length;i++){const k=rp[i]; const x=k%W+dx,y=((k/W)|0)+dy; if(x<0||y<0||x>=W||y>=H){e=1e18;break;} const s=y*W+x;
+      if(guard[s]&&!ringM[s]) {} 
+      const a=d[k*4]-d[s*4],b=d[k*4+1]-d[s*4+1],c=d[k*4+2]-d[s*4+2]; e+=a*a+b*b+c*c; n++;}
+    if(n&&e/n<(best?best.e:1e18)) best={e:e/n,dx,dy};
+  }
+  if(!best) return null;
+  const out=new Uint8ClampedArray(d);
+  for(const k of mp){const x=k%W+best.dx,y=((k/W)|0)+best.dy,s=y*W+x; out[k*4]=d[s*4];out[k*4+1]=d[s*4+1];out[k*4+2]=d[s*4+2];}
+  return {data:out,dx:best.dx,dy:best.dy,err:best.e};
+};
+
 if(typeof module!=='undefined') module.exports=GWR;
 </script>
 
@@ -476,9 +598,9 @@ function process(i){
   if(wantTpl){
     const tp=GWR.detectTemplate(it.img,it.hint);
     if(tp && (tp.score>1.1 || it.hint || o.mode==='tpl')){
-      const r=GWR.removeTemplate(it.img,tp,{pad:2+o.grow});
+      const r=GWR.removeTemplateInpaint(it.img,tp,{pad:Math.max(4,o.grow+2),cloneMaxErr:1e9});
       data=r.data; const h2=Math.round(tp.n/2)+2; bbox={x0:tp.cx-h2,y0:tp.cy-h2,x1:tp.cx+h2,y1:tp.cy+h2};
-      how=`template + reverse-alpha (α≈${(r.alpha||0).toFixed(2)}) + ghép màu nền quanh logo`;
+      how=`xóa sạch vùng logo + chép họa tiết nền lân cận (${GWR.lastFill&&GWR.lastFill.used==='clone'?'clone':'patch'}) + hòa màu viền`;
     }
   }
   if(!data && det && o.mode!=='tpl'){
