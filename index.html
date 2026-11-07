@@ -1,288 +1,356 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Auto Watermark Remover</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            background-color: #0f0f12;
-            color: #f0f0f5;
-            font-family: system-ui, -apple-system, sans-serif;
-            overflow: hidden;
-        }
-        .sidebar { background-color: #18181c; border-right: 1px solid #2a2a32; }
-        .canvas-container {
-            background-image: 
-                linear-gradient(45deg, #141418 25%, transparent 25%), 
-                linear-gradient(-45deg, #141418 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #141418 75%), 
-                linear-gradient(-45deg, transparent 75%, #141418 75%);
-            background-size: 24px 24px;
-            background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
-            background-color: #1d1d24;
-        }
-        input[type="range"] {
-            -webkit-appearance: none;
-            width: 100%; height: 4px; background: #333340; border-radius: 2px;
-        }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 14px; height: 14px; background: #a855f7; border-radius: 50%; cursor: pointer;
-        }
-        #main-canvas { box-shadow: 0 10px 30px rgba(0,0,0,0.7); cursor: crosshair; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gemini Logo Remover</title>
+<style>
+:root{--bg:#0e0f12;--card:#17191e;--line:#2a2d35;--tx:#e8eaf0;--mut:#8b90a0;--ac:#6ea8fe}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:20px;margin:0 0 4px}
+p.sub{color:var(--mut);margin:0 0 16px}
+#drop{border:2px dashed var(--line);border-radius:14px;padding:36px 16px;text-align:center;color:var(--mut);cursor:pointer;background:var(--card)}
+#drop.over{border-color:var(--ac);color:var(--tx)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:14px 0}
+.row label{color:var(--mut);font-size:13px;display:flex;gap:8px;align-items:center}
+button{background:var(--ac);color:#06101f;border:0;border-radius:9px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:14px}
+button.sec{background:var(--card);color:var(--tx);border:1px solid var(--line)}
+button:disabled{opacity:.4;cursor:default}
+.views{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:700px){.views{grid-template-columns:1fr}}
+.v{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px}
+.v h3{margin:2px 4px 8px;font-size:12px;color:var(--mut);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+canvas{width:100%;height:auto;display:block;border-radius:6px;background:#000}
+#zoomRow{display:none;margin-top:12px}
+#zoomRow .views{grid-template-columns:1fr 1fr}
+#info{font-size:13px;color:var(--mut);min-height:20px}
+#list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.item{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer;font-size:13px}
+.item.on{border-color:var(--ac)}
+.item span.s{margin-left:auto;color:var(--mut)}
+</style>
 </head>
-<body class="h-screen flex flex-col">
+<body>
+<main>
+<h1>Gemini Logo Remover</h1>
+<p class="sub">Tự tìm logo ✦ ở góc dưới phải, nhận biết màu nền (tối / sáng / nhiều màu) rồi chọn cách xóa phù hợp. Chạy 100% trên máy bạn, không upload ảnh.</p>
 
-    <header class="h-12 sidebar flex items-center px-4 justify-between border-b border-zinc-800">
-        <div class="flex items-center gap-2">
-            <span class="font-bold text-sm bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
-                AUTO GEMINI REMOVER
-            </span>
-        </div>
-        <div class="text-xs text-zinc-500">Tô đỏ vùng Logo để AI tự động xóa</div>
-    </header>
+<div id="drop">Kéo thả ảnh vào đây hoặc bấm để chọn (nhiều ảnh cũng được)<input id="file" type="file" accept="image/*" multiple hidden></div>
 
-    <div class="flex flex-1 overflow-hidden">
-        <!-- Sidebar Controls -->
-        <aside class="sidebar w-72 flex flex-col p-4 gap-5 shrink-0">
-            <div>
-                <button id="upload-btn" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-950">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                    Tải Ảnh Lên
-                </button>
-                <input type="file" id="image-input" accept="image/*" class="hidden">
-            </div>
+<div class="row" id="ctl" style="display:none">
+  <label>Độ phủ mask <input id="grow" type="range" min="0" max="7" step="1" value="4"></label>
+  <label>Grain <input id="grain" type="range" min="0" max="1" step="0.05" value="1"></label>
+  <label>Chế độ
+    <select id="mode"><option value="auto">Tự động</option><option value="alpha">Reverse-alpha (nền tối)</option><option value="fit">Fit nền + grain (nền sáng/màu)</option></select>
+  </label>
+  <button id="dl">Tải ảnh đã xóa</button>
+  <button class="sec" id="dlAll">Tải tất cả</button>
+</div>
+<div id="info"></div>
+<div class="views" id="views" style="display:none">
+  <div class="v"><h3>Gốc <small style="text-transform:none">(bấm vào ảnh để chỉ vị trí logo nếu tự dò sai)</small></h3><canvas id="cin"></canvas></div>
+  <div class="v"><h3>Đã xóa</h3><canvas id="cout"></canvas></div>
+</div>
+<div id="zoomRow"><div class="views">
+  <div class="v"><h3>Zoom – gốc</h3><canvas id="zin"></canvas></div>
+  <div class="v"><h3>Zoom – kết quả</h3><canvas id="zout"></canvas></div>
+</div></div>
+<div id="list"></div>
+</main>
 
-            <div class="space-y-4">
-                <div class="space-y-1.5">
-                    <div class="flex justify-between text-xs">
-                        <label class="text-zinc-400">Kích thước cọ chọn</label>
-                        <span id="size-val" class="text-purple-400 font-mono">30px</span>
-                    </div>
-                    <input type="range" id="brush-size" min="10" max="100" value="30">
-                </div>
-            </div>
+<script>
+/* ================= CORE (pure, chạy được cả Node) ================= */
+const GWR = (() => {
+  const lum = (d,i)=> (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114);
 
-            <!-- Action Buttons -->
-            <div class="space-y-2">
-                <button id="process-btn" disabled class="w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-                    Xóa Vùng Đã Tô
-                </button>
-                <button id="clear-mask-btn" disabled class="w-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700 py-2 rounded-lg text-xs font-medium">
-                    Xóa Vùng Chọn Red
-                </button>
-            </div>
+  // Giải hệ tuyến tính nhỏ n×n (Gauss + pivot)
+  function solve(A,b){
+    const n=b.length;
+    for(let i=0;i<n;i++){
+      let p=i; for(let r=i+1;r<n;r++) if(Math.abs(A[r][i])>Math.abs(A[p][i])) p=r;
+      [A[i],A[p]]=[A[p],A[i]]; [b[i],b[p]]=[b[p],b[i]];
+      const d=A[i][i]||1e-9;
+      for(let r=i+1;r<n;r++){const f=A[r][i]/d; if(!f) continue; for(let c=i;c<n;c++)A[r][c]-=f*A[i][c]; b[r]-=f*b[i];}
+    }
+    const x=new Array(n).fill(0);
+    for(let i=n-1;i>=0;i--){let s=b[i]; for(let c=i+1;c<n;c++) s-=A[i][c]*x[c]; x[i]=s/(A[i][i]||1e-9);}
+    return x;
+  }
+  const basis=(u,v)=>[1,u,v,u*u,u*v,v*v];
 
-            <div class="grid grid-cols-2 gap-2 mt-auto">
-                <button id="undo-btn" disabled class="bg-zinc-800 hover:bg-zinc-700 text-xs py-2 rounded border border-zinc-700 disabled:opacity-30">Hoàn tác</button>
-                <button id="download-btn" disabled class="bg-zinc-800 hover:bg-zinc-700 text-xs py-2 rounded border border-zinc-700 disabled:opacity-30">Lưu Ảnh</button>
-            </div>
-
-            <div class="bg-purple-950/20 border border-purple-800/30 p-3 rounded-lg text-[11px] text-zinc-300 space-y-1">
-                <p class="font-bold text-purple-400">Cách sử dụng xóa tự động:</p>
-                <p>1. Dùng cọ tô màu đỏ che kín toàn bộ Logo Gemini.</p>
-                <p>2. Bấm <b>"Xóa Vùng Đã Tô"</b>, thuật toán sẽ tự fill lại vùng ảnh dựa theo ảnh nền xung quanh.</p>
-            </div>
-        </aside>
-
-        <!-- Main Viewport -->
-        <main class="flex-1 relative canvas-container overflow-auto flex items-center justify-center p-8">
-            <div class="relative">
-                <canvas id="main-canvas" class="hidden"></canvas>
-            </div>
-
-            <div id="welcome" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0f0f12]/90 backdrop-blur-sm">
-                <div class="text-center p-8 border border-zinc-800 bg-zinc-900/50 rounded-2xl max-w-sm">
-                    <h2 class="text-lg font-bold mb-1 text-white">Chưa có ảnh nào</h2>
-                    <p class="text-zinc-400 text-xs">Vui lòng chọn ảnh có Logo Gemini để thực hiện xóa tự động.</p>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <script>
-        const canvas = document.getElementById('main-canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        
-        // Secondary Canvases for processing
-        const imgCanvas = document.createElement('canvas');
-        const imgCtx = imgCanvas.getContext('2d', { willReadFrequently: true });
-        const maskCanvas = document.createElement('canvas');
-        const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
-
-        const uploadBtn = document.getElementById('upload-btn');
-        const imageInput = document.getElementById('image-input');
-        const processBtn = document.getElementById('process-btn');
-        const clearMaskBtn = document.getElementById('clear-mask-btn');
-        const undoBtn = document.getElementById('undo-btn');
-        const downloadBtn = document.getElementById('download-btn');
-        const welcome = document.getElementById('welcome');
-        const brushSizeInput = document.getElementById('brush-size');
-        const sizeVal = document.getElementById('size-val');
-
-        let isDrawing = false;
-        let history = [];
-
-        uploadBtn.onclick = () => imageInput.click();
-
-        imageInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                const img = new Image();
-                img.onload = () => {
-                    [canvas, imgCanvas, maskCanvas].forEach(c => {
-                        c.width = img.width;
-                        c.height = img.height;
-                    });
-
-                    imgCtx.drawImage(img, 0, 0);
-                    resetMask();
-                    render();
-
-                    canvas.classList.remove('hidden');
-                    welcome.style.display = 'none';
-
-                    history = [];
-                    saveToHistory();
-                    
-                    processBtn.disabled = false;
-                    clearMaskBtn.disabled = false;
-                    downloadBtn.disabled = false;
-                };
-                img.src = evt.target.result;
-            };
-            reader.readAsDataURL(file);
-        };
-
-        function resetMask() {
-            maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+  // Fit mặt phẳng bậc 2 mỗi kênh trên vùng ROI, loại outlier lặp (robust)
+  function fitBackground(img, roi, excludeFn){
+    const {data:d,width:W}=img;
+    const {x0,y0,x1,y1}=roi, w=x1-x0, h=y1-y0;
+    const use=new Uint8Array(w*h).fill(1);
+    let coef=[null,null,null];
+    for(let it=0; it<5; it++){
+      for(let ch=0;ch<3;ch++){
+        const A=Array.from({length:6},()=>new Array(6).fill(0)), b=new Array(6).fill(0);
+        for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+          if(!use[y*w+x]) continue;
+          const B=basis(x/w,y/h), v=d[((y+y0)*W+x+x0)*4+ch];
+          for(let i=0;i<6;i++){b[i]+=B[i]*v; for(let j=0;j<6;j++)A[i][j]+=B[i]*B[j];}
         }
+        for(let i=0;i<6;i++)A[i][i]+=1e-6;
+        coef[ch]=solve(A,b);
+      }
+      // residual → loại outlier
+      const res=new Float32Array(w*h);
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+        const B=basis(x/w,y/h); let m=0;
+        for(let ch=0;ch<3;ch++){let p=0; for(let i=0;i<6;i++)p+=coef[ch][i]*B[i]; m=Math.max(m,Math.abs(d[((y+y0)*W+x+x0)*4+ch]-p));}
+        res[y*w+x]=m;
+      }
+      const act=[]; for(let i=0;i<w*h;i++) if(use[i]) act.push(res[i]);
+      act.sort((a,b)=>a-b);
+      const med=act[act.length>>1]||0, sig=Math.max(1.2,1.4826*med);
+      const thr=Math.max(4,3*sig);
+      let changed=0;
+      for(let i=0;i<w*h;i++){
+        const keep = res[i]<=thr && !(excludeFn&&excludeFn(i%w+x0,(i/w|0)+y0));
+        if(keep!==!!use[i]){use[i]=keep?1:0;changed++;}
+      }
+      if(!changed) break;
+    }
+    const pred=(x,y,ch)=>{const B=basis((x-x0)/w,(y-y0)/h);let p=0;for(let i=0;i<6;i++)p+=coef[ch][i]*B[i];return p;};
+    return {pred,use,roi};
+  }
 
-        function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(imgCanvas, 0, 0);
-
-            // Draw red mask overlay
-            ctx.save();
-            ctx.globalAlpha = 0.5;
-            ctx.drawImage(maskCanvas, 0, 0);
-            ctx.restore();
+  // Dò logo: residual so với nền fit → thành phần liên thông gần góc nhất
+  function detect(img, hint){
+    const {data:d,width:W,height:H}=img;
+    const s=Math.max(96,Math.min(Math.round(0.14*W),280));
+    let roi;
+    if(hint){ // người dùng bấm vào
+      const r=Math.round(s*0.6);
+      roi={x0:Math.max(0,hint.x-r),y0:Math.max(0,hint.y-r),x1:Math.min(W,hint.x+r),y1:Math.min(H,hint.y+r)};
+    } else roi={x0:W-s,y0:H-s,x1:W,y1:H};
+    const w=roi.x1-roi.x0,h=roi.y1-roi.y0;
+    const bg=fitBackground(img,roi);
+    // ngưỡng nhiễu từ phần dư của pixel "sạch"
+    const res=new Float32Array(w*h), sgn=new Float32Array(w*h);
+    let cl=[];
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const i=((y+roi.y0)*W+x+roi.x0)*4;
+      let sum=0; for(let ch=0;ch<3;ch++) sum+=d[i+ch]-bg.pred(x+roi.x0,y+roi.y0,ch);
+      sgn[y*w+x]=sum/3; res[y*w+x]=Math.abs(sum/3);
+      if(bg.use[y*w+x]) cl.push(res[y*w+x]);
+    }
+    cl.sort((a,b)=>a-b);
+    const sig=Math.max(1,1.4826*(cl[cl.length>>1]||0));
+    const thr=Math.max(7,4*sig);
+    const bin=new Uint8Array(w*h); for(let i=0;i<w*h;i++) bin[i]=res[i]>thr?1:0;
+    // connected components (8-neighbour)
+    const lab=new Int32Array(w*h); const comps=[]; let n=0;
+    for(let i=0;i<w*h;i++){
+      if(!bin[i]||lab[i]) continue;
+      n++; const st=[i]; lab[i]=n; let cnt=0,mnx=1e9,mny=1e9,mxx=-1,mxy=-1,sp=0;
+      while(st.length){
+        const c=st.pop(); cnt++; const cx=c%w,cy=(c/w)|0;
+        mnx=Math.min(mnx,cx);mxx=Math.max(mxx,cx);mny=Math.min(mny,cy);mxy=Math.max(mxy,cy); sp+=sgn[c];
+        for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+          const nx=cx+dx,ny=cy+dy; if(nx<0||ny<0||nx>=w||ny>=h)continue;
+          const j=ny*w+nx; if(bin[j]&&!lab[j]){lab[j]=n;st.push(j);}
         }
+      }
+      comps.push({id:n,cnt,mnx,mny,mxx,mxy,sign:sp/cnt});
+    }
+    // chọn: đủ lớn, hình gọn (không dính cạnh ROI nhiều), gần góc/hint nhất
+    const tx=hint?hint.x-roi.x0:w, ty=hint?hint.y-roi.y0:h;
+    let best=null,bs=-1e9;
+    for(const c of comps){
+      const bw=c.mxx-c.mnx+1,bh=c.mxy-c.mny+1;
+      if(c.cnt<40||bw>0.7*w||bh>0.7*h) continue;
+      const cx=(c.mnx+c.mxx)/2,cy=(c.mny+c.mxy)/2;
+      const dist=Math.hypot(cx-tx,cy-ty);
+      const fill=c.cnt/(bw*bh);                 // sao 4 cánh ≈ 0.4–0.6
+      const sc=c.cnt*Math.min(1,fill*2) - dist*(hint?8:2);
+      if(sc>bs){bs=sc;best=c;}
+    }
+    if(!best) return null;
+    const mask=new Uint8Array(W*H);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++) if(lab[y*w+x]===best.id) mask[(y+roi.y0)*W+x+roi.x0]=1;
+    return {mask,roi,bbox:{x0:best.mnx+roi.x0,y0:best.mny+roi.y0,x1:best.mxx+roi.x0,y1:best.mxy+roi.y0},
+            sign:best.sign,sig,bg,count:best.cnt};
+  }
 
-        // Mouse Events for drawing mask
-        canvas.onmousedown = (e) => {
-            isDrawing = true;
-            drawMask(e);
-        };
-
-        canvas.onmousemove = (e) => {
-            if (isDrawing) drawMask(e);
-        };
-
-        window.onmouseup = () => isDrawing = false;
-
-        function drawMask(e) {
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            const radius = parseInt(brushSizeInput.value) / 2;
-
-            maskCtx.fillStyle = '#ff0000';
-            maskCtx.beginPath();
-            maskCtx.arc(x, y, radius, 0, Math.PI * 2);
-            maskCtx.fill();
-
-            render();
+  function dilate(mask,W,H,r){
+    let cur=mask;
+    for(let k=0;k<r;k++){
+      const nx=new Uint8Array(W*H);
+      for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+        if(cur[y*W+x]){nx[y*W+x]=1;continue;}
+        let on=0;
+        for(let dy=-1;dy<=1&&!on;dy++)for(let dx=-1;dx<=1;dx++){
+          const X=x+dx,Y=y+dy; if(X>=0&&Y>=0&&X<W&&Y<H&&cur[Y*W+X]){on=1;break;}
         }
+        nx[y*W+x]=on;
+      }
+      cur=nx;
+    }
+    return cur;
+  }
 
-        clearMaskBtn.onclick = () => {
-            resetMask();
-            render();
-        };
+  // Phân loại nền quanh logo (vòng ngoài mask)
+  function classify(img,det){
+    const {data:d,width:W}=img;
+    const ring=dilate(det.mask,img.width,img.height,6), inner=dilate(det.mask,img.width,img.height,3);
+    let L=0,n=0,sr=0,sg=0,sb=0; const ls=[];
+    const {x0,y0,x1,y1}=det.roi;
+    for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+      const k=y*W+x; if(ring[k]&&!inner[k]){const i=k*4; const l=lum(d,i); L+=l;n++;ls.push(l);sr+=d[i];sg+=d[i+1];sb+=d[i+2];}
+    }
+    if(!n) return {lum:0,sd:0,kind:'dark'};
+    L/=n; let v=0; for(const l of ls) v+=(l-L)*(l-L); const sd=Math.sqrt(v/n);
+    const mr=sr/n,mg=sg/n,mb=sb/n, chroma=Math.max(mr,mg,mb)-Math.min(mr,mg,mb);
+    let kind = L<150 ? 'dark' : (chroma>40 ? 'colour' : 'light');
+    if(sd>18 && kind!=='dark') kind='busy';
+    return {lum:L,sd,chroma,kind};
+  }
 
-        // Inpainting Fast Algorithm (Navier-Stokes / Fast Telea Approximation)
-        processBtn.onclick = () => {
-            const w = canvas.width;
-            const h = canvas.height;
-            const imgData = imgCtx.getImageData(0, 0, w, h);
-            const maskData = maskCtx.getImageData(0, 0, w, h);
-            
-            const pixels = imgData.data;
-            const mask = maskData.data;
+  // Xóa
+  function remove(img,det,opt={}){
+    const {width:W,height:H}=img;
+    const out=new Uint8ClampedArray(img.data);
+    const d=img.data;
+    const grow=opt.grow??4, grainAmt=opt.grain??1;
+    const cls=classify(img,det);
+    let mode=opt.mode||'auto';
+    if(mode==='auto') mode = (cls.kind==='dark' && det.sign>0) ? 'alpha' : 'fit';
+    const core=det.mask;
+    const wide=dilate(core,W,H,grow);
+    // mask mềm: lõi =1, viền feather
+    const soft=new Float32Array(W*H);
+    const ring2=dilate(core,W,H,grow+2);
+    for(let i=0;i<W*H;i++) soft[i]=wide[i]?1:(ring2[i]?0.5:0);
+    // ước lượng alpha toàn cục của logo (trắng, bán trong suốt) từ lõi
+    const {bg}=det; let aList=[];
+    if(mode==='alpha'){
+      for(let y=det.roi.y0;y<det.roi.y1;y++)for(let x=det.roi.x0;x<det.roi.x1;x++){
+        const k=y*W+x; if(!core[k]) continue;
+        let a=0,c=0; for(let ch=0;ch<3;ch++){const b=bg.pred(x,y,ch),den=255-b; if(den>60){a+=(d[k*4+ch]-b)/den;c++;}}
+        if(c) aList.push(a/c);
+      }
+      aList.sort((p,q)=>p-q);
+    }
+    const aMed = aList.length? aList[aList.length>>1] : 0;
+    // mẫu grain từ vùng sạch
+    const grainPool=[];
+    for(let y=det.roi.y0;y<det.roi.y1;y++)for(let x=det.roi.x0;x<det.roi.x1;x++){
+      const k=y*W+x; if(ring2[k]) continue;
+      grainPool.push([d[k*4]-bg.pred(x,y,0),d[k*4+1]-bg.pred(x,y,1),d[k*4+2]-bg.pred(x,y,2)]);
+    }
+    { // cắt đuôi nặng của grain (tránh chấm đen/trắng lẻ)
+      let s2=0; for(const g of grainPool) s2+=(g[0]*g[0]+g[1]*g[1]+g[2]*g[2])/3;
+      const lim=2.2*Math.sqrt(s2/Math.max(1,grainPool.length));
+      for(const g of grainPool) for(let c=0;c<3;c++) g[c]=Math.max(-lim,Math.min(lim,g[c]));
+    }
+    let seed=1234567; const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+    for(let y=det.roi.y0;y<det.roi.y1;y++)for(let x=det.roi.x0;x<det.roi.x1;x++){
+      const k=y*W+x, m=soft[k]; if(!m) continue;
+      const i=k*4; let fill=[0,0,0];
+      let rawA=-1;
+      if(mode==='alpha' && core[k]){ let aa=0,cc=0; for(let ch=0;ch<3;ch++){const b=bg.pred(x,y,ch),den=255-b; if(den>60){aa+=(d[i+ch]-b)/den;cc++;}} rawA=cc?aa/cc:-1; }
+      if(mode==='alpha' && core[k] && rawA>0.04){
+        // reverse alpha blend: orig=(p-255a)/(1-a), a theo từng pixel (giữ viền mịn), kẹp quanh median
+        let a=0,c=0; for(let ch=0;ch<3;ch++){const b=bg.pred(x,y,ch),den=255-b; if(den>60){a+=(d[i+ch]-b)/den;c++;}}
+        a=c?a/c:aMed; a=Math.max(0,Math.min(Math.min(0.95,aMed*1.25+0.02),a));
+        for(let ch=0;ch<3;ch++) fill[ch]=(d[i+ch]-255*a)/(1-a);
+        // pha 1 phần grain nhỏ để tránh vùng "quá mịn"
+        if(grainPool.length&&grainAmt>0){const g=grainPool[(rnd()*grainPool.length)|0]; for(let ch=0;ch<3;ch++) fill[ch]+=g[ch]*0.25*grainAmt;}
+        // chống lệch: kéo về nền fit nếu lệch quá xa
+        for(let ch=0;ch<3;ch++){const b=bg.pred(x,y,ch); fill[ch]=Math.max(b-14,Math.min(b+14,fill[ch]));}
+      } else {
+        for(let ch=0;ch<3;ch++) fill[ch]=bg.pred(x,y,ch);
+        if(grainPool.length&&grainAmt>0){const g=grainPool[(rnd()*grainPool.length)|0]; for(let ch=0;ch<3;ch++) fill[ch]+=g[ch]*grainAmt;}
+      }
+      for(let ch=0;ch<3;ch++) out[i+ch]=Math.round(d[i+ch]*(1-m)+fill[ch]*m);
+    }
+    return {data:out,mode,cls,alpha:aMed};
+  }
+  return {detect,remove,classify,fitBackground};
+})();
+if(typeof module!=='undefined') module.exports=GWR;
+</script>
 
-            // Simple Fast Inpaint: Replace masked pixels with averaged color from boundary
-            const maxPasses = 8;
-            for (let pass = 0; pass < maxPasses; pass++) {
-                for (let y = 1; y < h - 1; y++) {
-                    for (let x = 1; x < w - 1; x++) {
-                        const idx = (y * w + x) * 4;
-                        if (mask[idx] > 0) { // Is masked
-                            let r = 0, g = 0, b = 0, count = 0;
+<script>
+/* ================= UI ================= */
+if(typeof document!=='undefined'){
+const $=id=>document.getElementById(id);
+const items=[]; let cur=-1;
+const names={dark:'nền tối',light:'nền sáng',colour:'nền màu',busy:'nền nhiều chi tiết'};
 
-                            // Sample 8 neighbors
-                            const neighbors = [
-                                ((y - 1) * w + (x - 1)) * 4, ((y - 1) * w + x) * 4, ((y - 1) * w + (x + 1)) * 4,
-                                (y * w + (x - 1)) * 4,                             (y * w + (x + 1)) * 4,
-                                ((y + 1) * w + (x - 1)) * 4, ((y + 1) * w + x) * 4, ((y + 1) * w + (x + 1)) * 4
-                            ];
+$('drop').onclick=()=>$('file').click();
+$('file').onchange=e=>addFiles(e.target.files);
+['dragover','dragenter'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('over')}));
+['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('over')}));
+$('drop').addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+['grow','grain','mode'].forEach(id=>$(id).addEventListener('input',()=>{if(cur>=0)process(cur)}));
 
-                            for (let nIdx of neighbors) {
-                                if (mask[nIdx] === 0 || pass > 2) {
-                                    r += pixels[nIdx];
-                                    g += pixels[nIdx + 1];
-                                    b += pixels[nIdx + 2];
-                                    count++;
-                                }
-                            }
+async function addFiles(fl){
+  for(const f of fl){
+    if(!f.type.startsWith('image/')) continue;
+    const bmp=await createImageBitmap(f);
+    const c=document.createElement('canvas'); c.width=bmp.width;c.height=bmp.height;
+    const cx=c.getContext('2d',{willReadFrequently:true}); cx.drawImage(bmp,0,0);
+    items.push({name:f.name,img:cx.getImageData(0,0,c.width,c.height),hint:null,result:null});
+  }
+  renderList(); if(cur<0&&items.length) select(0);
+}
+function renderList(){
+  $('list').innerHTML='';
+  items.forEach((it,i)=>{const d=document.createElement('div');d.className='item'+(i===cur?' on':'');
+    d.innerHTML=`<b>${it.name}</b><span class="s">${it.status||''}</span>`;d.onclick=()=>select(i);$('list').appendChild(d);});
+}
+function select(i){cur=i;$('ctl').style.display='flex';$('views').style.display='grid';process(i);}
+function opts(){return{grow:+$('grow').value,grain:+$('grain').value,mode:$('mode').value};}
 
-                            if (count > 0) {
-                                pixels[idx] = r / count;
-                                pixels[idx + 1] = g / count;
-                                pixels[idx + 2] = b / count;
-                                mask[idx] = 0; // mark as solved for next passes
-                            }
-                        }
-                    }
-                }
-            }
-
-            imgCtx.putImageData(imgData, 0, 0);
-            resetMask();
-            render();
-            saveToHistory();
-        };
-
-        function saveToHistory() {
-            if (history.length >= 10) history.shift();
-            history.push(imgCtx.getImageData(0, 0, canvas.width, canvas.height));
-            undoBtn.disabled = history.length <= 1;
-        }
-
-        undoBtn.onclick = () => {
-            if (history.length > 1) {
-                history.pop();
-                const last = history[history.length - 1];
-                imgCtx.putImageData(last, 0, 0);
-                resetMask();
-                render();
-                undoBtn.disabled = history.length <= 1;
-            }
-        };
-
-        brushSizeInput.oninput = () => sizeVal.textContent = brushSizeInput.value + 'px';
-
-        downloadBtn.onclick = () => {
-            const link = document.createElement('a');
-            link.download = 'gemini_auto_cleaned.png';
-            link.href = imgCanvas.toDataURL();
-            link.click();
-        };
-    </script>
+function process(i){
+  const it=items[i], {width:W,height:H}=it.img;
+  const det=GWR.detect(it.img,it.hint);
+  const cin=$('cin'),cout=$('cout'); cin.width=cout.width=W;cin.height=cout.height=H;
+  cin.getContext('2d').putImageData(it.img,0,0);
+  if(!det){
+    cout.getContext('2d').putImageData(it.img,0,0);
+    it.status='không thấy logo'; it.result=null;
+    $('info').textContent='Không dò thấy logo. Bấm vào ảnh gốc ngay chỗ logo để chỉ vị trí.';
+    $('zoomRow').style.display='none'; renderList(); return;
+  }
+  const r=GWR.remove(it.img,det,opts());
+  it.result=r.data; it.det=det;
+  const o=new ImageData(r.data,W,H); cout.getContext('2d').putImageData(o,0,0);
+  const g=cin.getContext('2d'); g.strokeStyle='#6ea8fe';g.lineWidth=Math.max(1,W/500);
+  const b=det.bbox; g.strokeRect(b.x0-3,b.y0-3,b.x1-b.x0+7,b.y1-b.y0+7);
+  const kindName=names[r.cls.kind];
+  $('info').textContent=`Logo ${b.x1-b.x0+1}×${b.y1-b.y0+1}px tại (${b.x0},${b.y0}) · ${kindName} (độ sáng ${r.cls.lum.toFixed(0)}) → cách xóa: ${r.mode==='alpha'?'reverse-alpha blend':'fit nền + grain'}`;
+  it.status=kindName; renderList();
+  // zoom
+  const pad=24, zx=Math.max(0,b.x0-pad), zy=Math.max(0,b.y0-pad), zw=Math.min(W-zx,b.x1-b.x0+1+2*pad), zh=Math.min(H-zy,b.y1-b.y0+1+2*pad);
+  const zs=Math.max(1,Math.floor(360/Math.max(zw,zh)));
+  [['zin',it.img.data],['zout',r.data]].forEach(([id,data])=>{
+    const t=document.createElement('canvas');t.width=W;t.height=H;t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(data),W,H),0,0);
+    const z=$(id);z.width=zw*zs;z.height=zh*zs;const c=z.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(t,zx,zy,zw,zh,0,0,zw*zs,zh*zs);
+    z.style.maxWidth='100%';
+  });
+  $('zoomRow').style.display='block';
+}
+$('cin').addEventListener('click',e=>{
+  if(cur<0)return; const it=items[cur],r=$('cin').getBoundingClientRect();
+  it.hint={x:Math.round((e.clientX-r.left)/r.width*it.img.width),y:Math.round((e.clientY-r.top)/r.height*it.img.height)};
+  process(cur);
+});
+function save(it){
+  if(!it.result) return;
+  const c=document.createElement('canvas');c.width=it.img.width;c.height=it.img.height;
+  c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(it.result),c.width,c.height),0,0);
+  c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=it.name.replace(/\.\w+$/,'')+'_clean.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});
+}
+$('dl').onclick=()=>cur>=0&&save(items[cur]);
+$('dlAll').onclick=()=>{items.forEach((it,i)=>setTimeout(()=>{if(!it.result){const d=GWR.detect(it.img,it.hint);if(d)it.result=GWR.remove(it.img,d,opts()).data;}save(it)},i*300));};
+}
+</script>
 </body>
 </html>
